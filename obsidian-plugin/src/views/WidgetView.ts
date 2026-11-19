@@ -1,6 +1,5 @@
 import { ItemView, type WorkspaceLeaf } from 'obsidian'
 import type ProgressivePomodoroPlugin from '../main'
-import { mmss } from '../logic/dates'
 import { activeMs } from '../timer/TimerController'
 
 export const VIEW_WIDGET = 'progressive-pomodoro-widget'
@@ -11,10 +10,13 @@ interface ElectronWindow {
   isAlwaysOnTop(): boolean
   setMinimumSize?(w: number, h: number): void
   setSize?(w: number, h: number): void
+  setPosition?(x: number, y: number): void
 }
 
 /** Initial window size, in pixels (includes the title bar). */
 const WIDGET_SIZE = { width: 150, height: 80 }
+/** Gap from the screen's bottom-left corner, in pixels. */
+const WIDGET_MARGIN = 12
 
 /** Best-effort access to the Electron BrowserWindow hosting `win` (not part of Obsidian's public API). */
 function electronWindow(win: Window): ElectronWindow | null {
@@ -31,6 +33,9 @@ function electronWindow(win: Window): ElectronWindow | null {
  * Compact "minutes remaining" display meant to live in an Obsidian pop-out window
  * that is kept above every other application.
  */
+/** Whole-second part (00–59) of a duration, zero-padded. */
+const ss = (sec: number) => String(Math.floor(Math.abs(sec)) % 60).padStart(2, '0')
+
 export class WidgetView extends ItemView {
   private timeEl!: HTMLElement
   private subEl!: HTMLElement
@@ -64,12 +69,17 @@ export class WidgetView extends ItemView {
     win.setTimeout(() => { this.pin(); this.shrink() }, 300)
   }
 
-  /** Obsidian ignores the requested pop-out size, so resize the native window directly. */
+  /** Obsidian ignores the requested pop-out size/position, so size and place the native window directly. */
   private shrink() {
     const w = electronWindow(this.containerEl.win)
     try {
       w?.setMinimumSize?.(120, 100)
       w?.setSize?.(WIDGET_SIZE.width, WIDGET_SIZE.height)
+      // Park it in the bottom-left corner of the usable screen area (above the taskbar).
+      const scr = this.containerEl.win.screen as Screen & { availLeft?: number; availTop?: number }
+      const x = (scr.availLeft ?? 0) + WIDGET_MARGIN
+      const y = (scr.availTop ?? 0) + scr.availHeight - WIDGET_SIZE.height - WIDGET_MARGIN
+      w?.setPosition?.(Math.round(x), Math.round(y))
     } catch {
       /* ignore */
     }
@@ -104,15 +114,15 @@ export class WidgetView extends ItemView {
       el.toggleClass('is-paused', paused)
       if (remaining < 0) {
         this.timeEl.setText(`+${Math.floor(-remaining / 60)}`)
-        this.subEl.setText(mmss(remaining))
+        this.subEl.setText(ss(remaining))
       } else {
-        this.timeEl.setText(String(Math.ceil(remaining / 60)))
-        this.subEl.setText(mmss(remaining))
+        this.timeEl.setText(String(Math.floor(remaining / 60)))
+        this.subEl.setText(ss(remaining))
       }
     } else if (s?.phase === 'break' && s.breakUntil) {
       const left = Math.max(0, (s.breakUntil - Date.now()) / 1000)
-      this.timeEl.setText(String(Math.ceil(left / 60)))
-      this.subEl.setText(mmss(left))
+      this.timeEl.setText(String(Math.floor(left / 60)))
+      this.subEl.setText(ss(left))
     } else if (s) {
       this.timeEl.setText('✓')
       this.subEl.setText('rate')

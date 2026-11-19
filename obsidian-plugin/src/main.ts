@@ -49,10 +49,15 @@ export default class ProgressivePomodoroPlugin extends Plugin {
     this.register(this.timer.subscribe(() => this.updateStatus()))
     // Pop the widget open when a block starts (not for a block already running at load).
     let wasRunning = this.timer.state?.phase === 'running'
+    let lastStart = this.timer.state?.phase === 'running' ? this.timer.state.startedAt : null
     this.register(this.timer.subscribe(() => {
-      const running = this.timer.state?.phase === 'running'
+      const s = this.timer.state
+      const running = s?.phase === 'running'
       if (running && !wasRunning && this.data.settings.autoWidget) void this.openWidget(true)
       wasRunning = running
+      // Distinct "go" signal whenever a new block begins (including a no-break next block).
+      if (running && s.startedAt !== lastStart) this.beep('start')
+      lastStart = running ? s.startedAt : null
     }))
     this.registerInterval(window.setInterval(() => this.onTick(), 1000))
     this.updateStatus()
@@ -171,10 +176,7 @@ export default class ProgressivePomodoroPlugin extends Plugin {
   // ---- Clock & status bar ---------------------------------------------
   private onTick() {
     const { timeUp, breakOver } = this.timer.tick()
-    if (timeUp) {
-      new Notice("🍅 Time's up — if you're flowing, keep on flowing. Finish the block when you're ready.", 8000)
-      this.beep()
-    }
+    if (timeUp) this.beep()
     if (breakOver) {
       new Notice(`☕ Break over — next block: ${this.data.idle.planned} min.`, 8000)
       this.beep()
@@ -198,8 +200,12 @@ export default class ProgressivePomodoroPlugin extends Plugin {
     this.statusEl.toggle(text !== '')
   }
 
-  private beep() {
+  /** End/break-over: one soft, low-medium note (gentle, so it doesn't break flow). Start: one higher note, so the two signals feel different. */
+  private beep(kind: 'start' | 'end' = 'end') {
     if (!this.data.settings.sound) return
+    const notes: [number, number][] = kind === 'start'
+      ? [[0, 880]]
+      : [[0, 440]]
     try {
       const ctx = new AudioContext()
       const play = (at: number, freq: number) => {
@@ -207,14 +213,13 @@ export default class ProgressivePomodoroPlugin extends Plugin {
         const gain = ctx.createGain()
         osc.frequency.value = freq
         gain.gain.setValueAtTime(0.0001, ctx.currentTime + at)
-        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + at + 0.02)
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.35)
+        gain.gain.exponentialRampToValueAtTime(kind === 'start' ? 0.25 : 0.15, ctx.currentTime + at + 0.02)
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + (kind === 'start' ? 0.35 : 0.6))
         osc.connect(gain).connect(ctx.destination)
         osc.start(ctx.currentTime + at)
-        osc.stop(ctx.currentTime + at + 0.4)
+        osc.stop(ctx.currentTime + at + 0.7)
       }
-      play(0, 880)
-      play(0.45, 1175)
+      for (const [at, freq] of notes) play(at, freq)
       window.setTimeout(() => void ctx.close(), 1500)
     } catch {
       /* audio unavailable */

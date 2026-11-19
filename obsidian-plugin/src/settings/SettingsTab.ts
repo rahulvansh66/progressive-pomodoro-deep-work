@@ -77,7 +77,7 @@ export class SettingsTab extends PluginSettingTab {
 
     new Setting(el)
       .setName('Sound')
-      .setDesc('Play a chime when a block reaches its planned time and when a break ends.')
+      .setDesc('Play a chime when a block starts (one higher note), reaches its planned time, and when a break ends.')
       .addToggle((t) => t.setValue(s.sound).onChange(async (v) => { s.sound = v; await this.save() }))
 
     new Setting(el)
