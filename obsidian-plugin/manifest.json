@@ -1,0 +1,9 @@
+{
+  "id": "progressive-pomodoro",
+  "name": "Progressive Pomodoro",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Start small, rate your focus, skip the break when you're flowing, and grow your blocks. Sessions are logged as Markdown in your vault.",
+  "author": "rahulvansh66",
+  "isDesktopOnly": false
+}

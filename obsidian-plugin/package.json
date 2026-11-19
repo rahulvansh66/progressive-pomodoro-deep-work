@@ -1,0 +1,28 @@
+{
+  "name": "progressive-pomodoro-obsidian",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Progressive Pomodoro for Obsidian: start small, rate your focus, skip the break when flowing.",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "recharts": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.28.2",
+    "obsidian": "^1.14.4",
+    "typescript": "~7.0.2",
+    "vitest": "^5.1.1"
+  }
+}
