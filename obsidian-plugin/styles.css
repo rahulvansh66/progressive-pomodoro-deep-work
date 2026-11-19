@@ -148,3 +148,20 @@
 .pp-goal-history summary { cursor: pointer; color: var(--text-muted); }
 
 .pp-status { font-variant-numeric: tabular-nums; }
+
+/* ---- Floating widget (pop-out window) ---------------------------------- */
+.pp-widget {
+  display: flex; flex-direction: row; align-items: baseline; align-content: center; flex-wrap: wrap; justify-content: center; gap: var(--size-4-2);
+  height: 100%; padding: var(--size-4-2); text-align: center; user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.pp-widget-time { font-size: 3.5rem; font-weight: 700; line-height: 1; color: var(--text-normal); }
+.pp-widget-sub { margin: 0; font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.pp-widget.is-paused .pp-widget-time { color: var(--text-faint); }
+
+/* Minimal chrome for the widget's pop-out window: leave only the window controls. */
+body.pp-widget-window .view-header,
+body.pp-widget-window .workspace-tab-header,
+body.pp-widget-window .workspace-tab-header-new-tab,
+body.pp-widget-window .workspace-tab-header-tab-list { display: none; }
+.pp-widget { overflow: hidden; }

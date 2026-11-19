@@ -8,6 +8,7 @@ import { withDefaults, type PluginData } from './store/PluginData'
 import { SessionStore } from './store/SessionStore'
 import { activeMs, TimerController } from './timer/TimerController'
 import { DashboardView, HistoryView, TimerView, VIEW_DASHBOARD, VIEW_HISTORY, VIEW_TIMER } from './views/views'
+import { VIEW_WIDGET, WidgetView } from './views/WidgetView'
 
 export default class ProgressivePomodoroPlugin extends Plugin {
   data!: PluginData
@@ -34,6 +35,7 @@ export default class ProgressivePomodoroPlugin extends Plugin {
     this.registerView(VIEW_TIMER, (leaf) => new TimerView(leaf, this))
     this.registerView(VIEW_DASHBOARD, (leaf) => new DashboardView(leaf, this))
     this.registerView(VIEW_HISTORY, (leaf) => new HistoryView(leaf, this))
+    this.registerView(VIEW_WIDGET, (leaf) => new WidgetView(leaf, this))
 
     this.addRibbonIcon('timer', 'Progressive Pomodoro timer', () => void this.openView(VIEW_TIMER))
     this.statusEl = this.addStatusBarItem()
@@ -45,6 +47,18 @@ export default class ProgressivePomodoroPlugin extends Plugin {
     this.addSettingTab(new SettingsTab(this.app, this))
 
     this.register(this.timer.subscribe(() => this.updateStatus()))
+    // Pop the widget open when a block starts (not for a block already running at load).
+    let wasRunning = this.timer.state?.phase === 'running'
+    let lastStart = this.timer.state?.phase === 'running' ? this.timer.state.startedAt : null
+    this.register(this.timer.subscribe(() => {
+      const s = this.timer.state
+      const running = s?.phase === 'running'
+      if (running && !wasRunning && this.data.settings.autoWidget) void this.openWidget(true)
+      wasRunning = running
+      // Distinct "go" signal whenever a new block begins (including a no-break next block).
+      if (running && s.startedAt !== lastStart) this.beep('start')
+      lastStart = running ? s.startedAt : null
+    }))
     this.registerInterval(window.setInterval(() => this.onTick(), 1000))
     this.updateStatus()
 
@@ -89,6 +103,21 @@ export default class ProgressivePomodoroPlugin extends Plugin {
     await workspace.revealLeaf(leaf)
   }
 
+  /** Open (or focus) the floating "minutes remaining" widget in a small always-on-top pop-out window. */
+  async openWidget(auto = false) {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_WIDGET)[0]
+    if (existing) {
+      if (!auto) this.app.workspace.revealLeaf(existing)
+      ;(existing.view as WidgetView).pin()
+      return
+    }
+    const leaf = this.app.workspace.openPopoutLeaf({ size: { width: 160, height: 100 } })
+    await leaf.setViewState({ type: VIEW_WIDGET, active: true })
+    if (!(leaf.view as WidgetView).pin()) {
+      new Notice('Widget opened. Use the pin icon in its title bar to keep it on top.', 6000)
+    }
+  }
+
   // ---- Commands -------------------------------------------------------
   /** Ask before pausing: "Do you really need to interrupt this block?" */
   requestPause() {
@@ -103,6 +132,7 @@ export default class ProgressivePomodoroPlugin extends Plugin {
 
   private addCommands() {
     this.addCommand({ id: 'open-timer', name: 'Open timer', callback: () => void this.openView(VIEW_TIMER) })
+    this.addCommand({ id: 'open-widget', name: 'Open floating widget (always on top)', callback: () => void this.openWidget() })
     this.addCommand({ id: 'open-dashboard', name: 'Open dashboard', callback: () => void this.openView(VIEW_DASHBOARD) })
     this.addCommand({ id: 'open-history', name: 'Open history', callback: () => void this.openView(VIEW_HISTORY) })
     this.addCommand({
@@ -146,10 +176,7 @@ export default class ProgressivePomodoroPlugin extends Plugin {
   // ---- Clock & status bar ---------------------------------------------
   private onTick() {
     const { timeUp, breakOver } = this.timer.tick()
-    if (timeUp) {
-      new Notice("🍅 Time's up — if you're flowing, keep on flowing. Finish the block when you're ready.", 8000)
-      this.beep()
-    }
+    if (timeUp) this.beep()
     if (breakOver) {
       new Notice(`☕ Break over — next block: ${this.data.idle.planned} min.`, 8000)
       this.beep()
@@ -173,8 +200,12 @@ export default class ProgressivePomodoroPlugin extends Plugin {
     this.statusEl.toggle(text !== '')
   }
 
-  private beep() {
+  /** End/break-over: one soft, low-medium note (gentle, so it doesn't break flow). Start: one higher note, so the two signals feel different. */
+  private beep(kind: 'start' | 'end' = 'end') {
     if (!this.data.settings.sound) return
+    const notes: [number, number][] = kind === 'start'
+      ? [[0, 880]]
+      : [[0, 440]]
     try {
       const ctx = new AudioContext()
       const play = (at: number, freq: number) => {
@@ -182,14 +213,13 @@ export default class ProgressivePomodoroPlugin extends Plugin {
         const gain = ctx.createGain()
         osc.frequency.value = freq
         gain.gain.setValueAtTime(0.0001, ctx.currentTime + at)
-        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + at + 0.02)
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.35)
+        gain.gain.exponentialRampToValueAtTime(kind === 'start' ? 0.25 : 0.15, ctx.currentTime + at + 0.02)
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + (kind === 'start' ? 0.35 : 0.6))
         osc.connect(gain).connect(ctx.destination)
         osc.start(ctx.currentTime + at)
-        osc.stop(ctx.currentTime + at + 0.4)
+        osc.stop(ctx.currentTime + at + 0.7)
       }
-      play(0, 880)
-      play(0.45, 1175)
+      for (const [at, freq] of notes) play(at, freq)
       window.setTimeout(() => void ctx.close(), 1500)
     } catch {
       /* audio unavailable */
