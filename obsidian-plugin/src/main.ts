@@ -8,6 +8,7 @@ import { withDefaults, type PluginData } from './store/PluginData'
 import { SessionStore } from './store/SessionStore'
 import { activeMs, TimerController } from './timer/TimerController'
 import { DashboardView, HistoryView, TimerView, VIEW_DASHBOARD, VIEW_HISTORY, VIEW_TIMER } from './views/views'
+import { VIEW_WIDGET, WidgetView } from './views/WidgetView'
 
 export default class ProgressivePomodoroPlugin extends Plugin {
   data!: PluginData
@@ -34,6 +35,7 @@ export default class ProgressivePomodoroPlugin extends Plugin {
     this.registerView(VIEW_TIMER, (leaf) => new TimerView(leaf, this))
     this.registerView(VIEW_DASHBOARD, (leaf) => new DashboardView(leaf, this))
     this.registerView(VIEW_HISTORY, (leaf) => new HistoryView(leaf, this))
+    this.registerView(VIEW_WIDGET, (leaf) => new WidgetView(leaf, this))
 
     this.addRibbonIcon('timer', 'Progressive Pomodoro timer', () => void this.openView(VIEW_TIMER))
     this.statusEl = this.addStatusBarItem()
@@ -45,6 +47,13 @@ export default class ProgressivePomodoroPlugin extends Plugin {
     this.addSettingTab(new SettingsTab(this.app, this))
 
     this.register(this.timer.subscribe(() => this.updateStatus()))
+    // Pop the widget open when a block starts (not for a block already running at load).
+    let wasRunning = this.timer.state?.phase === 'running'
+    this.register(this.timer.subscribe(() => {
+      const running = this.timer.state?.phase === 'running'
+      if (running && !wasRunning && this.data.settings.autoWidget) void this.openWidget(true)
+      wasRunning = running
+    }))
     this.registerInterval(window.setInterval(() => this.onTick(), 1000))
     this.updateStatus()
 
@@ -89,6 +98,21 @@ export default class ProgressivePomodoroPlugin extends Plugin {
     await workspace.revealLeaf(leaf)
   }
 
+  /** Open (or focus) the floating "minutes remaining" widget in a small always-on-top pop-out window. */
+  async openWidget(auto = false) {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_WIDGET)[0]
+    if (existing) {
+      if (!auto) this.app.workspace.revealLeaf(existing)
+      ;(existing.view as WidgetView).pin()
+      return
+    }
+    const leaf = this.app.workspace.openPopoutLeaf({ size: { width: 160, height: 100 } })
+    await leaf.setViewState({ type: VIEW_WIDGET, active: true })
+    if (!(leaf.view as WidgetView).pin()) {
+      new Notice('Widget opened. Use the pin icon in its title bar to keep it on top.', 6000)
+    }
+  }
+
   // ---- Commands -------------------------------------------------------
   /** Ask before pausing: "Do you really need to interrupt this block?" */
   requestPause() {
@@ -103,6 +127,7 @@ export default class ProgressivePomodoroPlugin extends Plugin {
 
   private addCommands() {
     this.addCommand({ id: 'open-timer', name: 'Open timer', callback: () => void this.openView(VIEW_TIMER) })
+    this.addCommand({ id: 'open-widget', name: 'Open floating widget (always on top)', callback: () => void this.openWidget() })
     this.addCommand({ id: 'open-dashboard', name: 'Open dashboard', callback: () => void this.openView(VIEW_DASHBOARD) })
     this.addCommand({ id: 'open-history', name: 'Open history', callback: () => void this.openView(VIEW_HISTORY) })
     this.addCommand({

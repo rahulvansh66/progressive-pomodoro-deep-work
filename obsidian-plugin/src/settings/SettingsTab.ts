@@ -79,6 +79,11 @@ export class SettingsTab extends PluginSettingTab {
       .setName('Sound')
       .setDesc('Play a chime when a block reaches its planned time and when a break ends.')
       .addToggle((t) => t.setValue(s.sound).onChange(async (v) => { s.sound = v; await this.save() }))
+
+    new Setting(el)
+      .setName('Floating widget on start')
+      .setDesc('Open the small always-on-top minutes-remaining window whenever a block starts.')
+      .addToggle((t) => t.setValue(s.autoWidget).onChange(async (v) => { s.autoWidget = v; await this.save() }))
   }
 
   // ---- Categories -------------------------------------------------------

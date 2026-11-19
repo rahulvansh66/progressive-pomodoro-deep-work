@@ -45,6 +45,8 @@ export interface Settings {
   presets: number[]
   logFolder: string
   sound: boolean
+  /** Open the floating always-on-top widget whenever a block starts. */
+  autoWidget: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -57,4 +59,5 @@ export const DEFAULT_SETTINGS: Settings = {
   presets: [2, 30, 60, 5, 10, 15],
   logFolder: 'Pomodoro Log',
   sound: true,
+  autoWidget: true,
 }
